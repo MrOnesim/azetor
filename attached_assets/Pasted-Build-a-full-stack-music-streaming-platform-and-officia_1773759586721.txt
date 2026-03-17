@@ -1,0 +1,546 @@
+Build a full-stack music streaming platform and official website for Beninese artist Vano Baby (real name: Aurel Sylvanus Adjivon, aka Azéto Gbèdé), born May 9 1994 in Sainte-Rita, Cotonou, from Grand-Popo, South Benin. This project celebrates his 10 years of career (2014–2024) and serves as his official digital home.
+
+━━━ TECH STACK ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Frontend: React 18 + Vite + TypeScript + Tailwind CSS
+Animations: Framer Motion (all transitions, scroll reveals, player)
+State: Zustand (audio player + auth)
+Routing: React Router v6
+HTTP: Axios
+SEO: react-helmet-async
+Fonts (Google Fonts via index.html):
+  Bebas Neue (all display headings)
+  Playfair Display (italic accents)
+
+Backend: Node.js + Express.js + TypeScript
+Database: PostgreSQL + Prisma ORM
+Auth: JWT (HttpOnly cookie) + bcrypt (PIN hashing)
+Storage: Cloudinary (audio files + images, progressive streaming)
+Video: YouTube iFrame API (no self-hosted video)
+Email: Nodemailer (contact form + booking)
+Spotify: Client Credentials Flow (read-only artist data)
+  VITE_SPOTIFY_CLIENT_ID=1cf1c8410e114cbcb5974eeede2ac439
+  VITE_SPOTIFY_CLIENT_SECRET=(in Replit Secrets)
+  VITE_SPOTIFY_ARTIST_ID=6VxXJZxxq0cmpBvbVM8p0E
+
+━━━ COLOR PALETTE (STRICT — no gold, no beige) ━━━━━━━━━━
+#080808  background primary
+#111111  background secondary
+#161616  card background
+#1a1a1a  row hover
+#222222  borders
+#C0392B  red accent
+#E74C3C  red hover
+#FFFFFF  text primary
+#999999  text muted
+
+━━━ CUSTOM CURSOR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cursor: none on body
+Red dot 10px follows mouse instantly
+Outer red ring 36px follows with 0.15s lag
+On hover links/buttons: dot grows to 20px, ring disappears
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INTRO LOADER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+File: src/components/IntroLoader.tsx
+Show only once per session (sessionStorage key "vb_seen")
+Fullscreen #080808 fixed z-50:
+  Center: geometric owl SVG (120px)
+    White angular body, red glowing eyes
+    Breathing animation: scale 1→1.05→1 loop 2s
+  Below owl: "VANO BABY" Bebas Neue white letter-spacing 0.4em 1.4rem
+  Below: progress block max-width 280px centered
+    Counter 0→100 Bebas Neue 3rem white right-aligned
+    Bar 3px red fills left→right 2.5s easeInOut in sync
+    Label "CHARGEMENT" 0.55rem uppercase tracking-widest #999
+Animation sequence:
+  1. Owl + name fade in 0.6s
+  2. Counter + bar 2.5s
+  3. Pause 0.3s at 100
+  4. EXIT: top half y→"-50vh", bottom half y→"+50vh", 0.7s easeInOut
+  5. Unmount loader, reveal site
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REUSABLE COMPONENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+src/components/OwlIcon.tsx
+  Props: size (number default 40), animated (boolean default false)
+  Geometric SVG owl: white angular body, red eyes
+  Used in: IntroLoader, Navbar, Footer, About, Concert pages
+
+src/components/Navbar.tsx
+  Fixed top, transparent → #080808 on scroll + bottom border #222
+  Left: OwlIcon 28px + "VANO BABY" Bebas Neue white
+  Center links: Accueil / Biographie / Carrière / Musique / Vidéos / Concerts / Communauté
+  Right: "🎟 CONCERT" red pill + Connexion / Mon Profil button
+  Active link: red underline
+  Mobile: hamburger → fullscreen red overlay menu
+
+src/components/Footer.tsx
+  OwlIcon 40px + "VANO BABY" Bebas Neue large centered
+  "AZÉTO GBÈDÉ MUSIC" red small text
+  4-col links + social icons (white, red hover)
+  "© 2024 Vano Baby. Tous droits réservés. Cotonou, Bénin."
+  Red 1px top border
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PERSISTENT AUDIO PLAYER (Zustand)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+src/store/playerStore.ts
+State: currentTrack, queue, isPlaying, volume, currentTime,
+       duration, repeat ('none'|'one'|'all'), shuffle, isVisible
+
+src/components/PersistentPlayer.tsx
+  Fixed bottom bar z-9999, always visible when track loaded
+  Height: 72px desktop / 80px mobile
+  Background: #111111, top border 1px #222
+  Never unmounts — survives all React Router navigations
+
+  LEFT: 48x48 artwork + title (white) + artist (gray) + heart icon
+  CENTER: ⏮ prev / ▶⏸ play-pause (red 44px) / ⏭ next
+          shuffle + repeat icons (red when active)
+          progress bar 3px red on gray, clickable seek
+          time elapsed / total (gray 0.7rem)
+  RIGHT: volume slider (red) + queue icon + × close
+
+  30-second rule:
+    If user NOT authenticated → pause at 30s exactly
+    Show toast: "Tu aimes ce que tu entends ? Crée ton profil gratuit."
+    CTA "Créer mon profil" → opens AuthModal
+    User cannot replay same track until authenticated
+
+  Audio: HTML5 Audio API, preloads next track in queue
+  Cloudinary progressive streaming (HTTP Range Requests)
+
+src/components/QueueDrawer.tsx
+  Slides up from bottom, lists queue, draggable reorder
+  Current track highlighted red
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AUTH SYSTEM (pseudo + PIN)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+No email, no password. Only pseudo + PIN (4–6 digits).
+PIN hashed with bcrypt saltRounds 12
+JWT in HttpOnly cookie
+Anti-brute force: 3 attempts max → 15min block
+Pseudo unique with real-time availability check
+
+src/components/AuthModal.tsx
+  Framer Motion modal, #111111 background
+  Tab "Nouveau fan": pseudo + PIN + "Créer mon profil" red button
+  Tab "J'ai déjà un compte": pseudo + PIN + "Se connecter"
+  Auto-generated avatar (initials colored circle or dicebear)
+  Triggers: like/comment click, 30s limit, "Connexion" nav button
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 1 — HOME (/)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Section A — HERO (100vh)
+  Full-bleed photo (picsum.photos/1920/1080)
+  // TODO: replace with official Vano Baby press photo
+  Black gradient overlay bottom 60% + subtle red tint
+  Bottom-left: "VANO" white outline 18vw + "BABY" red solid 18vw (Bebas Neue)
+  Top-left badge: "2014 — 2024 · 10 ANS DE RÈGNE" white text, red left border
+  Subtitle: "Rappeur béninois · Azéto Gbèdé · Cotonou"
+  Bottom-right decorative "10" white outline 28vw opacity 0.06
+  Two CTAs: "▶ Écouter maintenant" (red) + "Voir tous les sons" (white outline)
+  Global play count ticker (from API)
+  Red pulsing scroll arrow bottom center
+
+Section B — DERNIÈRE SORTIE
+  2-col: cover 300px left + track info right
+  "▶ Lancer l'album" red button → loads queue
+  First 3 tracks preview with play buttons
+
+Section C — STATS ANIMÉES (count-up on scroll)
+  10+ ANS / 50+ TITRES / 4x AWARDS / 800K+ FANS
+  Red Bebas Neue 5rem numbers, white labels
+
+Section D — TOP TRACKS (Spotify row style)
+  Top 5 most played: # | art | title | album | duration | plays | ▶
+  Click → persistent player
+
+Section E — TIMELINE PREVIEW
+  "10 ANS EN QUELQUES DATES" heading
+  3 key milestone cards horizontal
+  "Voir toute la carrière →" → /career
+
+Section F — CONCERTS PROCHAINS (3 cards preview)
+  "Voir tous les concerts →" → /concerts
+
+Section G — CONCERT CTA (full red #C0392B background)
+  "10 ANS DE RÈGNE — COTONOU, BÉNIN"
+  Countdown: JOURS / HEURES / MINUTES / SECONDES (target Dec 31 2025)
+  Black button "Réserver ma place"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 2 — BIOGRAPHIE (/about)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Section A — HERO (60vh)
+  Background photo (picsum?random=10), dark gradient overlay
+  "BIOGRAPHIE" Bebas Neue white 10vw
+  Red horizontal rule below title
+
+Section B — STORY (alternating text + photo blocks)
+  Block 1 — LES ORIGINES (text left, photo right picsum?random=20)
+    "Né le 9 mai 1994 à Sainte-Rita, Cotonou, au sein d'une famille
+    originaire de Grand-Popo dans le sud du Bénin, Aurel Sylvanus
+    Adjivon grandit bercé par la culture locale et la musique de la rue.
+    Très tôt, il développe un sens aigu du rythme. Il adopte le nom
+    de scène Vano Baby et se forge un alter ego : Azéto Gbèdé."
+
+  Block 2 — LES DÉBUTS 2013–2014 (photo left picsum?random=21, text right)
+    "En 2013, il sort 'Drague Azonto', premier single qui crée le buzz
+    dans les rues de Cotonou. En 2014, il remporte le concours MTN
+    Découverte Talents, tremplin national assorti d'une dotation de
+    5 millions de FCFA. C'est le début d'une ascension fulgurante."
+
+  Block 3 — LA PERCÉE 2016–2018 (text left, photo right picsum?random=22)
+    "'Adigoue Gboun Gboun' en 2016 devient un hymne national. En 2018,
+    il signe avec Universal Music Africa, confirmation de sa stature
+    continentale. Son rap mêlant fon, français et anglais traduit
+    la réalité de la jeunesse béninoise."
+
+  Block 4 — LA MATURITÉ 2019–2024 (photo left picsum?random=23, text right)
+    "Avec 'Madame' en 2019, Vano Baby opère un virage artistique vers
+    un son plus mélodique et introspectif. 'Fitè', 'Diyo', 'Chéri Coco',
+    'Tu mérites tout' transcendent le rap pour toucher un public plus large.
+    De 2021 à 2024, il remporte chaque année le Bénin Top 10 Awards."
+
+Section C — L'EMBLÈME DU HIBOU
+  Centered dark section
+  Large OwlIcon 200px animated
+  Title: "L'EMBLÈME DU HIBOU" Bebas Neue white
+  Text: symbolique — sagesse, vision nocturne, maître de la nuit.
+  Métaphore de son parcours depuis les rues de Cotonou jusqu'aux scènes d'Afrique.
+
+Section D — RÉCOMPENSES (grid 2x3, dark cards red top border)
+  MTN Découverte Talents 2014
+  Contrat Universal Music Africa 2018
+  Bénin Top 10 Awards — Meilleur Artiste 2021
+  Bénin Top 10 Awards — Meilleur Artiste 2022
+  Bénin Top 10 Awards — Meilleur Artiste 2023
+  Ambassadeur Betclic Bénin 2023
+
+Section E — CITATIONS PRESSE
+  3 large pull quotes Playfair Display italic
+  Alternating red / white text
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 3 — CARRIÈRE (/career)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Section A — HERO (50vh)
+  "10 ANS DE RÈGNE" white + red, "2014 → 2024" subtitle
+
+Section B — TIMELINE COMPLÈTE
+  Vertical center line in red 2px
+  Alternating left/right cards, scroll-triggered slide-in
+  Red dot on line per event, year in red Bebas Neue 3rem
+  Card: #161616 bg, white title, gray description
+
+  Events:
+  2013: "Drague Azonto" — Premier single, naissance d'un phénomène
+  2014: MTN Découverte Talents — Victoire nationale, dotation 5M FCFA
+  2016: "Adigoue Gboun Gboun" — Buzz national, percée au Bénin
+  2017: "Je s'en fou" + "Tonssimè chap" — Collaborations & hits
+  2018: Universal Music Africa — Reconnaissance internationale
+  2019: "Madame" — Virage artistique, nouveau son romantique
+  2020: Label Red Line Africa — Nouveau partenariat stratégique
+  2021: Bénin Top 10 Awards — 1er titre Meilleur Artiste
+  2022: "Diyo" — Tube à conscience sociale
+  2023: Ambassadeur Betclic Bénin — Rayonnement national
+  2024: 10 ans de règne — Méga-concert en préparation
+
+Section C — ÉVOLUTION DU SON
+  Visual horizontal bar with 3 eras:
+  2013–2017: "RAP BRUT" → 2018–2019: "TRANSITION" → 2020–2024: "SON MÉLODIQUE"
+  Red gradient fill, description under each era
+
+Section D — COLLABORATIONS
+  Horizontal scrolling cards of collaborators
+  Avatar placeholder + name + track title
+
+Section E — LABELS & PARTENARIATS (3 text-logo cards)
+  MTN Bénin / Universal Music Africa / Red Line Records
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 4 — MUSIQUE (/music)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Section A — HERO (40vh)
+  "DISCOGRAPHIE" + red subtitle "2013 — 2024"
+
+Section B — SPOTIFY DATA (fetched via hook useSpotify.ts)
+  Token: POST accounts.spotify.com/api/token (Client Credentials)
+  Fetch: /artists/6VxXJZxxq0cmpBvbVM8p0E (name, followers, images, popularity)
+  Fetch: /artists/6VxXJZxxq0cmpBvbVM8p0E/top-tracks?market=BJ
+  Fetch: /artists/6VxXJZxxq0cmpBvbVM8p0E/albums?market=BJ&limit=20
+  Show skeleton loaders while fetching
+
+Section C — PLAYLIST HEADER (real Spotify data)
+  Cover: artist.images[0].url
+  Title: "VANO BABY — TOP TRACKS"
+  Followers: formatted (ex: "124 583 auditeurs mensuels")
+  Meta: "{topTracks.length} titres"
+  "▶ TOUT LIRE" red circle 56px button → loads all into player queue
+  "OUVRIR SUR SPOTIFY" green button → external link
+
+Section D — FILTER TABS
+  Tous / Singles / Collaborations
+  Active: red bg white text sharp corners
+
+Section E — TRACKLIST (Spotify style)
+  Column headers (sticky): # | (art) | TITRE | ALBUM | DATE | ⏱
+  Each row: number (→ red ▶ on hover) | 40x40 art | title + artist |
+            album name | year | duration (from duration_ms)
+  Hover: #1a1a1a bg, white text
+  Active/playing: red title + animated equalizer SVG (3 red bars)
+  Click:
+    If preview_url exists → play 30s preview in PersistentPlayer
+    If preview_url null → open external_urls.spotify in new tab
+  30s rule applies: pause at 30s if not authenticated → AuthModal
+  Small Spotify icon on rows without preview
+
+Section F — ALBUMS GRID (4 cols desktop / 2 mobile)
+  Real data from Spotify albums endpoint
+  Card: artwork + title Bebas Neue + year red + total tracks badge
+  Hover: red border + "Ouvrir sur Spotify" overlay
+  Click → album.external_urls.spotify new tab
+
+Section G — PLATEFORMES DE STREAMING
+  Spotify / Apple Music / YouTube Music / Deezer / Audiomack / Boomplay
+  Dark cards, red arrow, external link
+
+Section H — CLIP VIDÉO
+  Faux YouTube embed 16:9, black bg, red play button center
+  Title: "VANO BABY — DIYO (CLIP OFFICIEL)"
+  // TODO: replace with official YouTube embed URL
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 5 — VIDÉOS (/videos)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Filter tabs: Tous / Clips officiels / Freestyles / Lives / Interviews
+Video grid 3 cols: thumbnail + title + duration + view count
+Click → Framer Motion modal with YouTube iFrame embed
+  Custom UI around player, title, likes, comments
+  Comments: authenticated users only
+  30s limit for non-authenticated users
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 6 — CONCERTS (/concerts)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Section A — HERO (60vh)
+  OwlIcon 80px + "LE CONCERT" red badge
+  "10 ANS DE RÈGNE" Bebas Neue white 12vw
+  "VANO BABY EN CONCERT — COTONOU, BÉNIN"
+  Countdown: JOURS / HEURES / MINUTES / SECONDES white digits red colons
+
+Section B — UPCOMING EVENTS
+  Cards: date red Bebas Neue + time + city + venue + ticket button
+  "Je serai là 🙋" button (auth required) + fan count
+  Not authenticated → AuthModal
+
+Section C — BILLETTERIE (3 tier cards)
+  PELOUSE 15 000 FCFA / TRIBUNE 30 000 FCFA / VIP 75 000 FCFA
+  VIP: red border 2px + "RECOMMANDÉ" badge
+  Benefits list per tier + "Choisir ce billet" red button
+
+Section D — GALERIE PHOTOS (previous concerts)
+  Masonry grid 3 cols, 9 placeholders (picsum varied)
+  Hover: red overlay + zoom icon
+  Click → Framer Motion lightbox modal
+
+Section E — FAQ CONCERT (Framer Motion accordion)
+  6 questions:
+  Accès au site / Parking / Objets interdits /
+  Remboursements / Espace VIP / Streaming du concert
+
+Section F — ARCHIVES (past events, muted style)
+  Toggle "Voir les archives"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 7 — COMMUNAUTÉ (/community)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Section A — USER PROFILE (if authenticated)
+  Avatar + pseudo + join date
+  Badges grid (obtained bright, locked grayed + lock icon)
+  Progress bar toward next badge
+  Listening history (last 10 tracks)
+  Liked tracks list
+
+Section B — BADGES SHOWCASE (all 8)
+  🎧 Auditeur Actif (10 tracks écoutées)
+  🔥 Fan de la Première Heure (50 tracks)
+  💎 Légende (200 tracks)
+  💬 Voix du Peuple (20 commentaires)
+  ❤️ Cœur Fidèle (30 likes)
+  📅 Présent aux Concerts (3 événements "Je serai là")
+  🔁 Addict (même track 10 fois)
+  🌟 Découvreur (5 albums différents)
+  Each: icon + name + condition + progress bar
+
+Section C — LEADERBOARD TOP 10
+  Rank / Avatar / Pseudo / Score / Badges count
+  Score = écoutes + likes + commentaires + badges
+  Current user row highlighted red
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 8 — CONTACT (/contact)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Hero 40vh: "CONTACT" + "Bookings · Presse · Partenariats"
+2-col layout:
+  Left — form: Nom / Email / Objet (select) / Message / "ENVOYER →" red
+  Right — info: Azéto Gbèdé Music / contact@vanobaby.bj /
+          +229 XX XX XX XX / social links vertical
+Section B — BOOKING INTERNATIONAL
+  Dark card red top border + text about Red Line Records
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BACK-OFFICE ADMIN (/admin)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+/admin/login → email + strong password (NOT pseudo+PIN)
+Separate admin JWT, all /admin/* protected by adminOnly middleware
+Dark sidebar left + main content right
+
+DASHBOARD: stats cards (plays today/week/month/all-time),
+  new users chart 30 days, top 5 tracks, recent comments, next event
+
+MUSIQUE (/admin/music):
+  Albums/singles list with edit/delete/status toggle
+  Add form: title, feat, release date, genre,
+    cover upload → Cloudinary,
+    tracks drag-drop reorder,
+    per track: title + feat + audio upload → Cloudinary
+  Status: Brouillon / Publié / Archivé
+
+VIDÉOS (/admin/videos):
+  List + add form: title, description, YouTube URL, category, thumbnail upload
+  Edit / Delete, view stats
+
+CONCERTS (/admin/events):
+  List with status + "Je serai là" count
+  Add/Edit/Cancel event form
+
+MODÉRATION (/admin/moderation):
+  Comments table: user / content / flags / date / approve / delete / ban
+  Auto-flag at 3 user reports (highlighted red)
+  Ban: temp 7 days or permanent
+
+UTILISATEURS (/admin/users):
+  List: pseudo + join date + plays + badges + status
+  Search by pseudo, ban/unban actions
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BACKEND API
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Auth: POST /api/auth/register, /login, /logout | GET /api/auth/me
+Music: GET /api/albums, /api/albums/:id, /api/tracks/top
+       POST /api/tracks/:id/play (anti-spam 2h), /api/tracks/:id/like
+Videos: GET /api/videos, /api/videos/:id | POST /api/videos/:id/view, /like
+Comments: GET + POST /api/comments | POST /api/comments/:id/flag
+Events: GET /api/events | POST /api/events/:id/react
+Badges: GET /api/users/:id/badges
+Contact: POST /api/contact (Nodemailer)
+Admin CRUD: /api/admin/albums, tracks, videos, events, comments, users, stats
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DATABASE (Prisma schema)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Models: User, Album, Track, Video, Event, Like, Comment,
+        Badge, UserBadge, PlayHistory, EventReaction
+
+Seed with: 8 badge definitions, 1 admin user,
+  5 sample albums with tracks (placeholder audio_url),
+  3 upcoming events
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BADGE SYSTEM (server-side only)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+After every user action → call checkAndAwardBadges(userId)
+Query counts from PlayHistory, Like, Comment, EventReaction
+If condition met + badge not yet awarded → create UserBadge
+Return newly awarded badges to frontend
+Frontend shows toast: "🏆 Nouveau badge : [name]" (Framer Motion)
+NEVER calculate badges client-side
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FILE STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+/
+├── client/ (React + Vite)
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── main.tsx
+│   │   ├── pages/
+│   │   │   ├── Home.tsx
+│   │   │   ├── About.tsx
+│   │   │   ├── Career.tsx
+│   │   │   ├── Music.tsx
+│   │   │   ├── Videos.tsx
+│   │   │   ├── Concerts.tsx
+│   │   │   ├── Community.tsx
+│   │   │   ├── Contact.tsx
+│   │   │   └── admin/ (Login, Dashboard, Music, Videos, Events, Moderation, Users)
+│   │   ├── components/
+│   │   │   ├── OwlIcon.tsx
+│   │   │   ├── Navbar.tsx
+│   │   │   ├── Footer.tsx
+│   │   │   ├── IntroLoader.tsx
+│   │   │   ├── PersistentPlayer.tsx
+│   │   │   ├── QueueDrawer.tsx
+│   │   │   ├── AuthModal.tsx
+│   │   │   ├── TrackRow.tsx
+│   │   │   ├── AlbumCard.tsx
+│   │   │   ├── VideoCard.tsx
+│   │   │   ├── BadgeCard.tsx
+│   │   │   └── EventCard.tsx
+│   │   ├── store/
+│   │   │   ├── playerStore.ts
+│   │   │   └── authStore.ts
+│   │   └── hooks/
+│   │       ├── useSpotify.ts
+│   │       ├── useAuth.ts
+│   │       └── usePlayer.ts
+│   └── vite.config.ts
+│
+└── server/ (Node.js + Express)
+    ├── src/
+    │   ├── index.ts
+    │   ├── routes/ (auth, albums, tracks, videos, events, comments, badges, contact, admin/)
+    │   ├── middleware/ (auth.ts, adminOnly.ts)
+    │   ├── services/ (badgeService.ts, cloudinary.ts, mailer.ts)
+    │   └── prisma/ (schema.prisma, seed.ts)
+    └── package.json
+
+━━━ ANIMATIONS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AnimatePresence on all page transitions (y:40→0, opacity 0→1, 0.5s)
+Staggered fade-up on scroll (useInView) for all sections
+Stat counters: count-up on viewport enter
+Timeline: slide in alternating left/right on scroll
+Badge unlock: burst animation + toast
+Player: slide up on first play
+AuthModal: fade + scale
+
+━━━ .env ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+client/.env:
+  VITE_API_URL=http://localhost:4000
+  VITE_SPOTIFY_CLIENT_ID=1cf1c8410e114cbcb5974eeede2ac439
+  VITE_SPOTIFY_CLIENT_SECRET=(Replit Secret)
+  VITE_SPOTIFY_ARTIST_ID=6VxXJZxxq0cmpBvbVM8p0E
+
+server/.env:
+  DATABASE_URL=postgresql://...
+  JWT_SECRET=...
+  JWT_ADMIN_SECRET=...
+  CLOUDINARY_CLOUD_NAME=...
+  CLOUDINARY_API_KEY=...
+  CLOUDINARY_API_SECRET=...
+  MAIL_HOST=... MAIL_USER=... MAIL_PASS=...
+  ADMIN_EMAIL=contact@vanobaby.bj
+
+━━━ NOTES FINALES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- All photos: placeholder picsum.photos with // TODO comment
+- French language throughout
+- Mobile-first, tested iOS Safari + Android Chrome
+- No shadcn, no MUI — pure Tailwind + Framer Motion
+- Run client + server concurrently (concurrently package in root)
+- .gitignore must include: node_modules/ .env dist/ .replit replit.nix

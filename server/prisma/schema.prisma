@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int             @id @default(autoincrement())
+  pseudo       String          @unique
+  pin          String
+  avatarColor  String          @default("#C0392B")
+  isAdmin      Boolean         @default(false)
+  isBanned     Boolean         @default(false)
+  bannedUntil  DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  likes        Like[]
+  comments     Comment[]
+  playHistory  PlayHistory[]
+  badges       UserBadge[]
+  eventReacts  EventReaction[]
+}
+
+model Admin {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+}
+
+model Album {
+  id          Int      @id @default(autoincrement())
+  title       String
+  coverUrl    String   @default("")
+  releaseYear Int
+  type        String   @default("album")
+  status      String   @default("published")
+  createdAt   DateTime @default(now())
+  tracks      Track[]
+}
+
+model Track {
+  id          Int           @id @default(autoincrement())
+  title       String
+  feat        String        @default("")
+  audioUrl    String        @default("")
+  duration    Int           @default(0)
+  playCount   Int           @default(0)
+  albumId     Int
+  album       Album         @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  likes       Like[]
+  playHistory PlayHistory[]
+}
+
+model Video {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String    @default("")
+  youtubeUrl  String
+  thumbnailUrl String   @default("")
+  category    String    @default("clip")
+  viewCount   Int       @default(0)
+  likeCount   Int       @default(0)
+  status      String    @default("published")
+  createdAt   DateTime  @default(now())
+  comments    Comment[]
+}
+
+model Event {
+  id          Int             @id @default(autoincrement())
+  title       String
+  date        DateTime
+  venue       String
+  city        String
+  country     String          @default("Bénin")
+  ticketUrl   String          @default("")
+  status      String          @default("upcoming")
+  createdAt   DateTime        @default(now())
+  reactions   EventReaction[]
+}
+
+model Like {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  trackId   Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, trackId])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  videoId   Int
+  content   String
+  flagCount Int      @default(0)
+  approved  Boolean  @default(true)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Badge {
+  id          Int         @id @default(autoincrement())
+  slug        String      @unique
+  name        String
+  emoji       String
+  description String
+  condition   String
+  threshold   Int
+  userBadges  UserBadge[]
+}
+
+model UserBadge {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  badgeId   Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, badgeId])
+}
+
+model PlayHistory {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  trackId   Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  playedAt  DateTime @default(now())
+}
+
+model EventReaction {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  eventId   Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, eventId])
+}
